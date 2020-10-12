@@ -2,6 +2,7 @@ import argparse
 import concurrent.futures
 import csv
 import itertools
+import multiprocessing
 import pathlib
 import pipes
 import re
@@ -21,6 +22,7 @@ for keyword in (
     "CRNTI",
 ):
     re_keywords[keyword] = re.compile(rf"\W+{keyword}:\W([\d]+)")
+
 re_l3 = re.compile(r"\W+L3\[[^\]]+\]:\W([0-9a-f]+)")
 re_l3_value = re.compile(r'value="([^"]+)')
 DLT_FILE = "dlt.csv"
@@ -30,6 +32,8 @@ bounds = ("{", "}")
 T1 = 60
 I1 = 300
 MODE = 4
+NULL_ENB = 8388608
+NULL_MME = 2147483648
 X2_HND_REQ = "X2_HANDOVER_REQUEST"
 CORR_RULES = {4: {X2_HND_REQ: ("enb",)}}
 EXTRACT_RULES = {
@@ -49,10 +53,17 @@ DECODING_CACHE_SZ = 10
 DECODING_CACHE = {}
 
 
-class Message:
-    NULL_ENB = 8388608
-    NULL_MME = 2147483648
+def get_vcpu_nb():
+    # hope not on restricted cpu usage)
+    # return len(os.sched_getaffinity(0))
+    return multiprocessing.cpu_count()
 
+
+CPU_NB = get_vcpu_nb()
+CPU_RATIO = 2 / 3
+
+
+class Message:
     def __init__(self):
         self.NAME = None
         self.TIMESTAMP = None
@@ -76,18 +87,8 @@ class Message:
     def __repr__(self):
         return self.__str__()
 
-    def reset(self):
-        self.CRNTI = None
-        self.BODY = ""
-        self.NAME = None
-        self.TIMESTAMP = None
-        self.ENBS1APID = None
-        self.GLOBAL_CELL_ID = None
-        self.TRACE_RECORDING_SESSION_REFERENCE = None
-        self.l3 = None
-
     def parse_message(self, fl, l3=False):
-        self.reset()
+        # self.reset()
         body = False
         for line in fl:
             if bounds[0] in line:
@@ -108,7 +109,7 @@ class Message:
                         val = int(mo.group(1))
                         if (
                             k in ("ENBS1APID", "TRACE_RECORDING_SESSION_REFERENCE")
-                            and val == self.NULL_ENB
+                            and val == NULL_ENB
                         ):
                             continue
                         setattr(self, k, val)
@@ -121,30 +122,30 @@ class Message:
         return self.TIMESTAMP < other.TIMESTAMP
 
 
-class XDR:
-    @staticmethod
-    def parse_ts(ts: str):
-        if ts in DATE_CACHE:
-            return DATE_CACHE[ts]
-        try:
-            result = datetime.strptime(ts, "%H:%M:%S.%f")
-        except:
-            result = datetime.strptime(ts, "%H:%M:%S")
-        return result
+def parse_ts(ts: str):
+    if ts in DATE_CACHE:
+        return DATE_CACHE[ts]
+    try:
+        result = datetime.strptime(ts, "%H:%M:%S.%f")
+    except:
+        result = datetime.strptime(ts, "%H:%M:%S")
+    return result
 
+
+class XDR:
     def __init__(self, msg: Message):
         self.enb = msg.ENBS1APID
         self.crnti = msg.CRNTI
         self.trsr = msg.TRACE_RECORDING_SESSION_REFERENCE
         self.gci = msg.GLOBAL_CELL_ID
-        self.ts_begin = self.parse_ts(msg.TIMESTAMP)
+        self.ts_begin = parse_ts(msg.TIMESTAMP)
         self.ts_end = self.ts_begin
         self.metas = []
         self.messages = [msg]
         self.tmsi = None
 
     def is_closed(self, last_ts: str):
-        result = (self.parse_ts(last_ts) - self.ts_end).total_seconds() > T1
+        result = (parse_ts(last_ts) - self.ts_end).total_seconds() > T1
         return result
 
     def merge(self, other):
@@ -176,7 +177,7 @@ class XDR:
                 # print("neither crnti nor enbs1apid are filled\n" f"{self}\n{item}")
                 return
         if key_match and self.ts_begin is not None and self.ts_end is not None:
-            new_ts = self.parse_ts(item.TIMESTAMP)
+            new_ts = parse_ts(item.TIMESTAMP)
             if self.ts_begin < new_ts < self.ts_end:
                 return key_match
             if new_ts >= self.ts_end and (new_ts - self.ts_end).total_seconds() < I1:
@@ -204,7 +205,7 @@ class XDR:
         if msg.CRNTI is not None:
             if self.crnti is None:
                 self.crnti = msg.CRNTI
-        self.ts_end = max(self.ts_end, self.parse_ts(msg.TIMESTAMP))
+        self.ts_end = max(self.ts_end, parse_ts(msg.TIMESTAMP))
         self.messages.append(msg)
         if not meta:
             return
@@ -298,8 +299,9 @@ def decode_l3(msg: Message, fulldecode: bool = False):
     return result
 
 
-def correlate(msg: Message, meta: str):
+def correlate(msg: Message, func=None):
     matches = []
+    meta = None  # if func is None else func(msg)
     for idx, xdr in enumerate(XDRs):
         if not xdr.is_closed(msg.TIMESTAMP) and xdr.matches(msg):
             matches.append(idx)
@@ -342,6 +344,11 @@ def main(args):
 
     parsed = parser.parse_args(args)
     parsed.l3 = parsed.l3 or parsed.fulldecode
+    # func = None
+    # if parsed.fulldecode:
+    #     func = decode_l3_full
+    # elif parsed.l3:
+    #     func = decode_l3_short
     dlt_file = pathlib.Path(DLT_FILE)
     fl_nb = len(parsed.file)
     for in_file in parsed.file:
@@ -371,48 +378,26 @@ def main(args):
             if filtered:
                 results.append(msg)
                 ts = msg.TIMESTAMP
-                DATE_CACHE[ts] = XDR.parse_ts(ts)
+                DATE_CACHE[ts] = parse_ts(ts)
             msg = Message()
             msg.parse_message(fl, l3=parsed.l3 or parsed.fulldecode)
         if parsed.sorted or parsed.correlate:
             results = sorted(results)
-        iterator = iter(results)
-        msg_nb: int = len(results)
-        done = False
-        func = None
-        if parsed.fulldecode:
-            func = decode_l3_full
-        elif parsed.l3:
-            func = decode_l3_short
-        while not done:
-            if func is not None:
-                _msg_cache = []
-                for _ in range(DECODING_CACHE_SZ):
-                    try:
-                        msg = next(iterator)
-                        _msg_cache.append(msg)
-                    except StopIteration:
-                        done = True
-                        break
-                with concurrent.futures.ProcessPoolExecutor() as executor:
-                    for msg, meta in zip(_msg_cache, executor.map(func, _msg_cache)):
-                        DECODING_CACHE[msg.l3] = meta
-            else:
-                _msg_cache = results
-                done = True
-
-            for msg in _msg_cache:
-                msg: Message = msg
-                if parsed.correlate:
-                    print("msg left: ", fl_nb, msg_nb)
-                    msg_nb -= 1
-                    meta = DECODING_CACHE.get(msg.l3)
-                    correlate(msg, meta)
+        if not parsed.correlate:
+            for msg in results:
+                if parsed.headers:
+                    print(msg)
                 else:
-                    if parsed.headers:
-                        print(msg)
-                    else:
-                        print(msg.BODY)
+                    print(msg.BODY)
+        else:
+            msg_nb: int = len(results)
+            with concurrent.futures.ProcessPoolExecutor(
+                max_workers=int(CPU_NB * CPU_RATIO)
+            ) as executor:
+                for _ in executor.map(correlate, results):
+                    print(f"{fl_nb} {msg_nb} left")
+                    msg_nb -= 1
+
         fl_nb -= 1
     if parsed.correlate:
         for idx, xdr in enumerate(XDRs):
