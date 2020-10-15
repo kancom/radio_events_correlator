@@ -3,7 +3,9 @@ import re
 import sys
 from datetime import datetime
 
+__all__ = ["XDR", "Message"]
 bounds = ("{", "}")
+TS_FORMAT = "%H:%M:%S.%f"
 # [650500] INTERNAL_PER_RADIO_UE_MEASUREMENT_TA(3108) @ 06:19:51.247 {
 re_msg_nm = re.compile(r"\[[\d]+\]\W([^\(]+)\([\d]+\)\W@\W([\d:\.]+)\W{")
 # ENBS1APID: 271461
@@ -65,13 +67,25 @@ class Message:
             f"c:{self.CRNTI}"
         )
 
+    def matches(self, gci=None, enbid=None, trsr=None, crnti=None):
+        result = True
+        if gci is not None:
+            result &= gci == self.GLOBAL_CELL_ID
+        if crnti is not None and self.CRNTI is not None:
+            result &= crnti == self.CRNTI
+        if enbid is not None and self.ENBS1APID is not None:
+            result &= enbid == self.ENBS1APID
+        if trsr is not None and self.TRACE_RECORDING_SESSION_REFERENCE is not None:
+            result &= trsr == self.TRACE_RECORDING_SESSION_REFERENCE
+        return result
+
     def __repr__(self):
         return self.__str__()
 
-    def parse_message(self, fl, l3=False):
+    def from_text(self, strings, l3=False):
         # self.reset()
         body = False
-        for line in fl:
+        for line in strings:
             if bounds[0] in line:
                 mo = re_msg_nm.match(line)
                 if mo:
@@ -106,7 +120,7 @@ def parse_ts(ts: str):
     if ts in DATE_CACHE:
         return DATE_CACHE[ts]
     try:
-        result = datetime.strptime(ts, "%H:%M:%S.%f")
+        result = datetime.strptime(ts, TS_FORMAT)
     except:
         result = datetime.strptime(ts, "%H:%M:%S")
     DATE_CACHE[ts] = result
@@ -226,13 +240,15 @@ class XDR:
     def __str__(self):
         result = self.__repr__()
         result += ",".join(self.metas) + "\n"
-        for msg in self.messages:
+        for msg in sorted(self.messages):
             result += "\t" + str(msg) + "\n"
         return result
 
     def __repr__(self):
+        ts_begin = self.ts_begin.strftime(TS_FORMAT)
+        ts_end = self.ts_end.strftime(TS_FORMAT)
         result = (
-            f"{self.ts_begin} -- {self.ts_end}({len(self.messages)}): {self.tmsi}\t\t"
+            f"{ts_begin} -- {ts_end}({len(self.messages)}): {self.tmsi}\t\t"
             f"{self.gci}\t{self.enb}\t{self.trsr}\t{self.crnti}\n"
         )
         return result

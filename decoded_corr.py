@@ -71,12 +71,11 @@ def decode_l3(msg: Message, fulldecode: bool = False):
     return result
 
 
-def correlate(msgs: List[Message], func=None):
+def correlate(msgs: List[Message]):
     matches = []
     xdrs: List[XDR] = []
     print("Nb of msgs:", len(msgs))
     for msg in msgs:
-        meta = None  # if func is None else func(msg)
         for idx, xdr in enumerate(xdrs):
             if not xdr.is_closed(msg.TIMESTAMP) and xdr.matches(msg):
                 matches.append(idx)
@@ -87,13 +86,9 @@ def correlate(msgs: List[Message], func=None):
                     xdrs[matches[0]].merge(xdrs[idx])
                 for idx in matches[-1:0:-1]:
                     del xdrs[idx]
-            xdrs[matches[0]].add_msg(msg, meta)
-            if meta:
-                xdrs[matches[0]].add_meta(f"{msg.NAME}: {meta}")
+            xdrs[matches[0]].add_msg(msg)
         else:
             xdrs.append(XDR(msg))
-            if meta:
-                xdrs[-1].add_meta(f"{msg.NAME}: {meta}")
         del matches[:]
     return xdrs
 
@@ -106,53 +101,42 @@ def load_dlt(csv_file):
     assert len(DLTs) > 1
 
 
-def main(args):
+def parse_argsuments(args):
     parser = argparse.ArgumentParser(description="correlate text file")
-    for key in ("crnti", "enbs1apid", "trsr", "tmsi"):
+    for key in ("crnti", "enbid", "trsr", "tmsi"):
         parser.add_argument(f"--{key}", dest=key, type=int, action="store")
     parser.add_argument("--file", nargs="+", dest="file", action="store", required=True)
     parser.add_argument("--gci", dest="gci", type=int, action="store")
-    parser.add_argument("-f", dest="filter", action="store_true")
     parser.add_argument("--headers", dest="headers", action="store_true")
     parser.add_argument("--sorted", dest="sorted", action="store_true")
     parser.add_argument("--correlate", dest="correlate", action="store_true")
     parser.add_argument("--l3", dest="l3", action="store_true")
     parser.add_argument("--fulldecode", dest="fulldecode", action="store_true")
+    return parser.parse_args(args)
 
-    parsed = parser.parse_args(args)
+
+def main(args):
+    parsed = parse_argsuments(args)
     parsed.l3 = parsed.l3 or parsed.fulldecode
     if parsed.l3:
         dlt_file = pathlib.Path(DLT_FILE)
         assert dlt_file.exists()
         load_dlt(dlt_file)
-    # func = None
-    # if parsed.fulldecode:
-    #     func = decode_l3_full
-    # elif parsed.l3:
-    #     func = decode_l3_short
     quenue = [[] for x in range(JOBS_NB)]
-    fl_nb = len(parsed.file)
+    fl_nb = len(parsed.file) + 1
+    results = []
     for in_file in parsed.file:
-        results = []
+        fl_nb -= 1
         msg = Message()
         print(in_file, fl_nb)
         in_file = pathlib.Path(in_file)
         assert in_file.exists()
         fl = open(in_file, "r")
-        msg.parse_message(fl, l3=parsed.l3 or parsed.fulldecode)
+        msg.from_text(fl, l3=parsed.l3 or parsed.fulldecode)
         while msg.NAME is not None:
-            filtered = True
-            if parsed.gci is not None:
-                filtered &= parsed.gci == msg.GLOBAL_CELL_ID
-            if msg.CRNTI is not None and parsed.crnti is not None:
-                filtered &= parsed.crnti == msg.CRNTI
-            if msg.ENBS1APID is not None and parsed.enbs1apid is not None:
-                filtered &= parsed.enbs1apid == msg.ENBS1APID
-            if (
-                msg.TRACE_RECORDING_SESSION_REFERENCE is not None
-                and parsed.trsr is not None
-            ):
-                filtered &= parsed.trsr == msg.TRACE_RECORDING_SESSION_REFERENCE
+            filtered = msg.matches(
+                gci=parsed.gci, enbid=parsed.enbid, trsr=parsed.trsr, crnti=parsed.crnti
+            )
             if filtered:
                 if parsed.correlate:
                     quenue[msg.GLOBAL_CELL_ID % JOBS_NB].append(msg)
@@ -161,27 +145,49 @@ def main(args):
                 ts = msg.TIMESTAMP
                 parse_ts(ts)
             msg = Message()
-            msg.parse_message(fl, l3=parsed.l3 or parsed.fulldecode)
-        if parsed.sorted or parsed.correlate:
-            results = sorted(results)
-        if not parsed.correlate:
-            for msg in results:
-                if parsed.headers:
-                    print(msg)
-                else:
-                    print(msg.BODY)
-        else:
+            msg.from_text(fl, l3=parsed.l3 or parsed.fulldecode)
+
+        if parsed.correlate:
             with concurrent.futures.ProcessPoolExecutor() as executor:
                 for xdrs in executor.map(correlate, quenue):
                     XDRs.extend(xdrs)
                     # print(f"{fl_nb} {msg_nb} left")
                     # msg_nb -= 1
-        fl_nb -= 1
+            func = None
+            if parsed.fulldecode:
+                func = decode_l3_full
+            elif parsed.l3:
+                func = decode_l3_short
+            else:
+                continue
+            xdr_nb = sum([len(x) for x in quenue])
+
+            for xdr in XDRs:
+                with concurrent.futures.ProcessPoolExecutor(
+                    max_workers=JOBS_NB
+                ) as executor:
+                    for msg, meta in zip(
+                        xdr.messages, executor.map(func, xdr.messages)
+                    ):
+                        if meta is not None:
+                            xdr.add_meta(f"{msg.NAME}: {meta}")
+                        print(f"l3 decoding. {len(xdr.messages)} {xdr_nb} left")
+                        xdr_nb -= 1
     if parsed.correlate:
         for idx, xdr in enumerate(XDRs):
             if (parsed.tmsi and parsed.tmsi == xdr.tmsi) or (not parsed.tmsi):
                 print(idx, xdr)
+    else:
+        if parsed.sorted:
+            results = sorted(results)
+        for msg in results:
+            if parsed.headers:
+                print(msg)
+            else:
+                print(msg.BODY)
     print("Nb of messages: ", sum([len(x) for x in quenue]))
+    for _, t in TSHARK_CACHE.values():
+        t.close()
 
 
 if __name__ == "__main__":

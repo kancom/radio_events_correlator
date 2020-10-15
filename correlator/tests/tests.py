@@ -1,0 +1,97 @@
+from correlator.classes import XDR, Message
+
+msg_4g_from_text = [
+    """
+}
+[492] INTERNAL_PER_RADIO_UE_MEASUREMENT_TA(3108) @ 06:48:56.489 {
+    SCANNER_ID: 0000000000010000000000
+    RBS_MODULE_ID: EXTENSION_DU1
+    GLOBAL_CELL_ID: 153979139
+    ENBS1APID: 273678
+    MMES1APID: 127984332
+    GUMMEI: 250 - 01 - 33066 - 112
+    RAC_UE_REF: 31278838
+    TRACE_RECORDING_SESSION_REFERENCE: 27918
+    TIMESTAMP_START: 06:48:52.488
+    TA_INTERVAL: 1000 Measure(None, 1.0)
+    ARRAY_TA: [<NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>]
+}
+[672] INTERNAL_PER_RADIO_UE_MEASUREMENT(3075) @ 06:48:56.490 {
+""",
+    """
+[28036] S1_INITIAL_CONTEXT_SETUP_RESPONSE(1039) @ 06:48:53.817 {
+    SCANNER_ID: 0000000000010000000000
+    RBS_MODULE_ID: EXTENSION_DU2
+    GLOBAL_CELL_ID: 153813763
+    ENBS1APID: 268687
+    MMES1APID: 132170838
+    GUMMEI: 250 - 01 - 33066 - 112
+    RAC_UE_REF: 29443979
+    TRACE_RECORDING_SESSION_REFERENCE: 22927
+    L3[SENT]: 2009002700000300004005c007e0c456000840048004198f0033400f000032400a0a1f0b1a017d1aee0c16
+}""",
+    """
+[28124] RRC_UE_CAPABILITY_ENQUIRY(10) @ 06:48:53.818 {
+    SCANNER_ID: 0000000000010000000000
+    RBS_MODULE_ID: EXTENSION_DU2
+    GLOBAL_CELL_ID: 153813763
+    ENBS1APID: 268687
+    MMES1APID: 132170838
+    GUMMEI: 250 - 01 - 33066 - 112
+    RAC_UE_REF: 29443979
+    TRACE_RECORDING_SESSION_REFERENCE: 22927
+    L3[SENT]: 380040
+    CRNTI: 2799 Measure(None, 1.0)
+}""",
+    """
+[28176] RRC_RRC_CONNECTION_RECONFIGURATION_COMPLETE(13) @ 06:48:53.846 {
+    SCANNER_ID: 0000000000010000000000
+    RBS_MODULE_ID: EXTENSION_DU2
+    GLOBAL_CELL_ID: 153813763
+    ENBS1APID: 268673
+    MMES1APID: 151057579
+    GUMMEI: 250 - 01 - 33066 - 144
+    RAC_UE_REF: 29443972
+    TRACE_RECORDING_SESSION_REFERENCE: 22913
+    L3[RECEIVED]: 1200
+    CRNTI: 2769 Measure(None, 1.0)
+}""",
+    """
+[28236] RRC_UE_CAPABILITY_INFORMATION(19) @ 06:48:53.934 {
+    SCANNER_ID: 0000000000010000000000
+    RBS_MODULE_ID: EXTENSION_DU2
+    GLOBAL_CELL_ID: 153813763
+    ENBS1APID: 268687
+    MMES1APID: 132170838
+    GUMMEI: 250 - 01 - 33066 - 112
+    RAC_UE_REF: 29443979
+    TRACE_RECORDING_SESSION_REFERENCE: 22927
+    L3[RECEIVED]: 380115240002740caab541a955aa22920c112000600054284251cfb9a6bb65ca128e7dcd35db2f509473ee69aed96073cf5c4109c38f5d0cd35db2d001901d01bd5a60000cd24b7a4491b30600850e2468f4f2e7d800
+    CRNTI: 2799 Measure(None, 1.0)
+}
+
+""",
+]
+
+
+def test_msg_parsing():
+    msg = Message()
+    msg.from_text(msg_4g_from_text[0].split("\n"))
+    assert msg.BODY is not None
+    assert msg.GLOBAL_CELL_ID == 153979139
+    assert msg.NAME == "INTERNAL_PER_RADIO_UE_MEASUREMENT_TA"
+    assert msg.ENBS1APID == 273678
+    assert msg.TRACE_RECORDING_SESSION_REFERENCE == 27918
+    assert msg.TIMESTAMP == "06:48:56.489"
+
+
+def test_xdr_correlation():
+    msg = Message()
+    msg.from_text(msg_4g_from_text[1].split("\n"))
+    xdr = XDR(msg)
+    msg_proper = Message()
+    msg_proper.from_text(msg_4g_from_text[2].split("\n"))
+    assert xdr.matches(msg_proper)
+    msg_inproper = Message()
+    msg_inproper.from_text(msg_4g_from_text[3].split("\n"))
+    assert xdr.matches(msg_inproper) is None

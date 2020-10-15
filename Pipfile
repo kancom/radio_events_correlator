@@ -17,6 +17,7 @@ pytest = "*"
 pytest-asyncio = "*"
 black = "==19.3b0"
 py-spy = "*"
+coverage = "*"
 
 [packages]
 
