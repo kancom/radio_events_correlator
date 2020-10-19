@@ -1,6 +1,7 @@
 import argparse
 import concurrent.futures
 import csv
+import gzip
 import multiprocessing as mp
 import pathlib
 import pipes
@@ -144,7 +145,10 @@ def main(args):
         print(in_file, fl_nb)
         in_file = pathlib.Path(in_file)
         assert in_file.exists()
-        fl = open(in_file, "r")
+        if in_file.suffix == ".gz":
+            fl = iter(gzip.open(in_file, "rt").readlines())
+        else:
+            fl = open(in_file, "r")
         msg.from_text(fl, l3=parsed.l3 or parsed.fulldecode)
         while msg.cardinal_field_val is not None:
             filtered = msg.matches(
