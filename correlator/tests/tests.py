@@ -1,4 +1,4 @@
-from correlator.classes import XDR, Message
+from correlator.classes import XDR3G, XDR4G, Message3G, Message4G
 
 msg_4g_from_text = [
     """
@@ -72,26 +72,116 @@ msg_4g_from_text = [
 
 """,
 ]
+msg_3g_from_text = [
+    """
+[1516] RANAP_RELOCATION_REQUEST(275) @ 2020-09-21T06:37:59.758Z {
+    scanners: 000000000000000010000000
+    UE_CONTEXT_ID: Some(4107)
+    RNC_MODULE_ID: Some(0)
+    RNC_ID/CELL_ID[1]: (2241, 38327)
+    RNC_ID/CELL_ID[2]: <NA>
+    RNC_ID/CELL_ID[3]: <NA>
+    RNC_ID/CELL_ID[4]: <NA>
+    PDU_TYPE: PduType::UNAVAILABLE
+    PROTOCOL_ID: ProtocolId::RANAP(2)
+    L3[RECEIVED]: 00030081fa400008001740095052002116592233f7000440020a000003000180003d00815000a081291833035758b25300a1a7148c080091f4010cf200405c86481c20d4c0610d412808900030002a1c2138e7cf732d35db94271cf9ee65a6bb7
+884e39f3dccb4d76f509c73e7b9969aedb3d0127c410a438f4eba19969aedb003203803a03e82ad3001046925fd631cdfc8740830a1c48d1e9dbc397367d18f40830a1c48d1e9dbc397367d1a740830a1c48d1e9dbc397367d1af40830a1c48d1e9dbc397367d143a04
+1850e2468f4ede1cb9b3e8fed2d49005376c99a04d000820610307266d0a54c9d40d9bfff91ff9bfff91ff9bfff91ff9bfff91ff9bfff91ff9bfff91ff9bfff91ff9bfff91ff9bfff91ff9bfff91ff9bfff91ff9bfff91ff9bfff91ff9bfff91ffffcffebe882002321
+c329d2a4eefc2e702000001f6b70000000002b800800018b2040084a000103808c195b7000000c8401817100052f01092c051500000010052f010927c815000000700310041000001002f003a34144504f423ff802ee0000918000000b10005600e4e1bff00000043e0
+d557443d0080fb202d0001005940095000000000ad40010000ee400100000c40120808b187a811fa3b7429df434c32f083094e000b40120080d4f37bbfe400cdb86a72949933ed9378004f40039d31c300010060000552f010029b007f400352f010
+}""",
+    """
+[2063] NBAP_RADIO_LINK_SETUP_REQUEST(128) @ 2020-09-21T06:37:59.759Z {
+    scanners: 000000000000000010000000
+    UE_CONTEXT_ID: Some(4107)
+    RNC_MODULE_ID: Some(0)
+    RNC_ID/CELL_ID[1]: (2241, 38327)
+    RNC_ID/CELL_ID[2]: <NA>
+    RNC_ID/CELL_ID[3]: <NA>
+    RNC_ID/CELL_ID[4]: <NA>
+    PDU_TYPE: PduType::UNAVAILABLE
+    PROTOCOL_ID: ProtocolId::NBAP(1)
+    L3[SENT]: 001b22114681fa400004002c00020000012700180900b02406b700000140541105fa207a00000002a80001800038002100080028000200001f000000005114e5340a0001000050000100945114e534f02000d880770000d38072040095b700063200000000200140014f00c800020067401c00c01f20fc324f803500010a6ca8010000000000000000000000000002a200010002ae4035016240fc324f803500010a6ca801000000000000000000000000006440faf34f803500010a6ca8010000000000000000000000000000090212008089585c1e10fe404f803500010a6ca801000000000000000000000000000000026840020a00727840fc034f803500010a6ca8010000000000000000000000000000000268400200402e0791a4200d48010000930000000362000300001152488d2008014f0000000362000300012f068000001804295c0002036100018003b3400100043d40048000000002170002577d021d00010002a5000a12280243f13e60a00100029b005e202e278140e0000000a7990f8000000000000362000300001123f00000000000000362000300001125f00000000000000362000300001127f000000000000003620003000011723c0047000c0c140000000000000362000300005100166e02a7000200000278000200080336000100fc17400100fc1b40100008c10008c1402406400040100b0000
+}""",
+    """
+[2610] INTERNAL_SOFT_HANDOVER_EXECUTION(408) @ 2020-09-21T06:37:59.790Z {
+    scanners: 000000000000000000100000
+    UE_CONTEXT_ID: Some(512)
+    RNC_MODULE_ID: Some(0)
+    RNC_ID/CELL_ID[1]: (2241, 7079)
+    RNC_ID/CELL_ID[2]: (2241, 3939)
+    RNC_ID/CELL_ID[3]: <NA>
+    RNC_ID/CELL_ID[4]: <NA>
+    EVENT_TRIGGER: ADD_CELL_PROPOSAL (21)
+    C_ID_EVALUATED: 7079 Measure(None, 1.0)
+    RNC_ID_EVALUATED: 2241 Measure(None, 1.0)
+    CPICH_EC_NO_EVAL_CELL: 33 Measure(DeciBel, 0.5)
+    RSCP_EVAL_CELL: 25 Measure(DeciBelMilliWatt, 1.0)
+    HANDOVER_TYPE: ADD_CELL_PROPOSAL_ACT (0)
+    RESULT: SUCCESS (0)
+    FAILURE_REASON: <NA>
+    SOURCE_CONNECTION_PROPERTIES: 34588 Measure(None, 1.0)
+    SOURCE_C_ID_1_SECONDARY_SERV_HSDSCH_CELL: 23939 Measure(None, 1.0)
+    SOURCE_CONNECTION_PROPERTIES_EXT: 0 Measure(None, 1.0)
+    ANR_INITIATED: <NA>
+    SOURCE_C_ID_2_SECONDARY_SERV_HSDSCH_CELL: <NA>
+    SOURCE_CONF: 25 Measure(None, 1.0)
+""",
+]
 
 
-def test_msg_parsing():
-    msg = Message()
+def test_msg_4G_parsing():
+    msg = Message4G()
     msg.from_text(msg_4g_from_text[0].split("\n"))
-    assert msg.BODY is not None
-    assert msg.GLOBAL_CELL_ID == 153979139
-    assert msg.NAME == "INTERNAL_PER_RADIO_UE_MEASUREMENT_TA"
-    assert msg.ENBS1APID == 273678
-    assert msg.TRACE_RECORDING_SESSION_REFERENCE == 27918
-    assert msg.TIMESTAMP == "06:48:56.489"
+    assert msg.body is not None
+    assert msg.gci == 153979139
+    assert msg.name == "INTERNAL_PER_RADIO_UE_MEASUREMENT_TA"
+    assert msg.enbid == 273678
+    assert msg.trsr == 27918
+    assert msg.timestamp == "06:48:56.489"
 
 
-def test_xdr_correlation():
-    msg = Message()
+def test_msg_3G_parsing():
+    msg = Message3G()
+    msg.from_text(msg_3g_from_text[2].split("\n"))
+    assert msg.body is not None
+    assert msg.ueid == 512
+    assert msg.name == "INTERNAL_SOFT_HANDOVER_EXECUTION"
+    assert msg.rncmodid == 0
+    assert msg.rncid == 2241
+    assert msg.timestamp == "2020-09-21T06:37:59.790Z"
+
+
+def test_msg_matches():
+    msg = Message3G()
+    msg.from_text(msg_3g_from_text[2].split("\n"))
+    assert msg.matches(ueid=512, rncmodid=0, gci=None)
+    assert not msg.matches(ueid=512, rncmodid=1, gci=None)
+    msg2 = Message4G()
+    msg2.from_text(msg_4g_from_text[0].split("\n"))
+    assert msg2.matches(gci=153979139, trsr=27918, enbid=273678, ueid=None)
+    assert not msg2.matches(gci=1, trsr=27918, enbid=273678, ueid=None)
+
+
+def test_xdr_4G_correlation():
+    msg = Message4G()
     msg.from_text(msg_4g_from_text[1].split("\n"))
-    xdr = XDR(msg)
-    msg_proper = Message()
+    xdr = XDR4G(msg)
+    msg_proper = Message4G()
     msg_proper.from_text(msg_4g_from_text[2].split("\n"))
     assert xdr.matches(msg_proper)
-    msg_inproper = Message()
+    msg_inproper = Message4G()
     msg_inproper.from_text(msg_4g_from_text[3].split("\n"))
-    assert xdr.matches(msg_inproper) is None
+    assert xdr.matches(msg_inproper) == False
+
+
+def test_xdr_3G_correlation():
+    msg = Message3G()
+    msg.from_text(msg_3g_from_text[0].split("\n"))
+    xdr = XDR3G(msg)
+    msg_proper = Message3G()
+    msg_proper.from_text(msg_3g_from_text[1].split("\n"))
+    assert xdr.matches(msg_proper)
+    msg_inproper = Message3G()
+    msg_inproper.from_text(msg_3g_from_text[2].split("\n"))
+    assert xdr.matches(msg_inproper) == False

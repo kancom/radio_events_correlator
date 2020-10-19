@@ -9,7 +9,7 @@ import tempfile
 from datetime import datetime
 from typing import List
 
-from classes import XDR, Message, parse_ts
+from correlator.classes import XDR, XDR3G, XDR4G, Message, Message3G, Message4G
 
 DLT_FILE = "dlt.csv"
 DLTs = {}
@@ -74,10 +74,12 @@ def decode_l3(msg: Message, fulldecode: bool = False):
 def correlate(msgs: List[Message]):
     matches = []
     xdrs: List[XDR] = []
+    if len(msgs) > 0:
+        XDR_ = XDR4G if isinstance(msgs[0], Message4G) else XDR3G
     print("Nb of msgs:", len(msgs))
     for msg in msgs:
         for idx, xdr in enumerate(xdrs):
-            if not xdr.is_closed(msg.TIMESTAMP) and xdr.matches(msg):
+            if not xdr.is_closed(msg.timestamp) and xdr.matches(msg):
                 matches.append(idx)
         if len(matches) > 0:
             if len(matches) > 1:
@@ -88,7 +90,7 @@ def correlate(msgs: List[Message]):
                     del xdrs[idx]
             xdrs[matches[0]].add_msg(msg)
         else:
-            xdrs.append(XDR(msg))
+            xdrs.append(XDR_(msg))
         del matches[:]
     return xdrs
 
@@ -103,7 +105,7 @@ def load_dlt(csv_file):
 
 def parse_argsuments(args):
     parser = argparse.ArgumentParser(description="correlate text file")
-    for key in ("crnti", "enbid", "trsr", "tmsi"):
+    for key in ("crnti", "enbid", "trsr", "tmsi", "ueid", "rncmodid"):
         parser.add_argument(f"--{key}", dest=key, type=int, action="store")
     parser.add_argument("--file", nargs="+", dest="file", action="store", required=True)
     parser.add_argument("--gci", dest="gci", type=int, action="store")
@@ -112,11 +114,22 @@ def parse_argsuments(args):
     parser.add_argument("--correlate", dest="correlate", action="store_true")
     parser.add_argument("--l3", dest="l3", action="store_true")
     parser.add_argument("--fulldecode", dest="fulldecode", action="store_true")
+    parser.add_argument(
+        "-g", dest="tech", action="store", choices=("3G", "4G"), default="4G"
+    )
     return parser.parse_args(args)
 
 
 def main(args):
     parsed = parse_argsuments(args)
+    if parsed.tech == "4G":
+        XDR_ = XDR4G
+        Message_ = Message4G
+    else:
+        XDR_ = XDR3G
+        Message_ = Message3G
+    parse_ts = XDR_.parse_ts
+
     parsed.l3 = parsed.l3 or parsed.fulldecode
     if parsed.l3:
         dlt_file = pathlib.Path(DLT_FILE)
@@ -127,24 +140,29 @@ def main(args):
     results = []
     for in_file in parsed.file:
         fl_nb -= 1
-        msg = Message()
+        msg = Message_()
         print(in_file, fl_nb)
         in_file = pathlib.Path(in_file)
         assert in_file.exists()
         fl = open(in_file, "r")
         msg.from_text(fl, l3=parsed.l3 or parsed.fulldecode)
-        while msg.NAME is not None:
+        while msg.cardinal_field_val is not None:
             filtered = msg.matches(
-                gci=parsed.gci, enbid=parsed.enbid, trsr=parsed.trsr, crnti=parsed.crnti
+                gci=parsed.gci,
+                enbid=parsed.enbid,
+                trsr=parsed.trsr,
+                crnti=parsed.crnti,
+                rncmodid=parsed.rncmodid,
+                ueid=parsed.ueid,
             )
             if filtered:
                 if parsed.correlate:
-                    quenue[msg.GLOBAL_CELL_ID % JOBS_NB].append(msg)
+                    quenue[msg.cardinal_field_val % JOBS_NB].append(msg)
                 else:
                     results.append(msg)
-                ts = msg.TIMESTAMP
+                ts = msg.timestamp
                 parse_ts(ts)
-            msg = Message()
+            msg = Message_()
             msg.from_text(fl, l3=parsed.l3 or parsed.fulldecode)
 
         if parsed.correlate:
