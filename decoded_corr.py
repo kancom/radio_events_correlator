@@ -8,6 +8,7 @@ import pipes
 import sys
 import tempfile
 from datetime import datetime
+# from multiprocessing import Manager
 from typing import List
 
 from correlator.classes import XDR, XDR3G, XDR4G, Message, Message3G, Message4G
@@ -15,10 +16,11 @@ from correlator.classes import XDR, XDR3G, XDR4G, Message, Message3G, Message4G
 DLT_FILE = "dlt.csv"
 DLTs = {}
 L3_LOOK_FOR = ("tmsi", "imsi", "imei", "teid")
-TSHARK_CACHE = {}
-DECODING_CACHE_SZ = 10
-DECODING_CACHE = {}
 XDRs: List[XDR] = []
+
+
+# smm = Manager()
+# TSHARK_CACHE = smm.dict()
 
 
 def get_vcpu_nb():
@@ -43,8 +45,8 @@ def decode_l3(msg: Message, fulldecode: bool = False):
     if msg.l3 is None:
         return
     p = t = None
-    if msg.name in TSHARK_CACHE:
-        p, t = TSHARK_CACHE[msg.name]
+    if False and msg.name in TSHARK_CACHE:
+        p = TSHARK_CACHE[msg.name]
     else:
         p = pipes.Template()
         p.append("xxd -r -p", "--")
@@ -61,14 +63,14 @@ def decode_l3(msg: Message, fulldecode: bool = False):
             grep_cmd = 'grep -iP "' + "|".join(L3_LOOK_FOR) + '"'
             p.append(grep_cmd, "--")
 
-        t = tempfile.NamedTemporaryFile(mode="w")
-        TSHARK_CACHE[msg.name] = p, t
+        # TSHARK_CACHE[msg.name] = p
+    t = tempfile.NamedTemporaryFile(mode="w")
     t.write(msg.l3)
     t.flush()
 
     f = p.open(t.name, "r")
     result = f.read()
-    # t.close()
+    t.close()
     return result
 
 
@@ -210,8 +212,6 @@ def main(args):
             else:
                 print(msg.BODY)
     print("Nb of messages: ", sum([len(x) for x in quenue]))
-    for _, t in TSHARK_CACHE.values():
-        t.close()
 
 
 if __name__ == "__main__":
