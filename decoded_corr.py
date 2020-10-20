@@ -43,14 +43,14 @@ def decode_l3(msg: Message, fulldecode: bool = False):
     if msg.l3 is None:
         return
     p = t = None
-    if msg.NAME in TSHARK_CACHE:
-        p, t = TSHARK_CACHE[msg.NAME]
+    if msg.name in TSHARK_CACHE:
+        p, t = TSHARK_CACHE[msg.name]
     else:
         p = pipes.Template()
         p.append("xxd -r -p", "--")
         p.append("od -Ax -tx1", "--")
         p.append("text2pcap -a -l 147 -n - - 2>/dev/null", "--")
-        dlt = DLTs.get(msg.NAME, "s1ap") if "X2" not in msg.NAME else "x2ap"
+        dlt = DLTs.get(msg.name, "s1ap") if "X2" not in msg.name else "x2ap"
         tshark_cmd = (
             'tshark -n -o \'uat:user_dlts:"User 0 (DLT=147)","'
             + dlt
@@ -62,7 +62,7 @@ def decode_l3(msg: Message, fulldecode: bool = False):
             p.append(grep_cmd, "--")
 
         t = tempfile.NamedTemporaryFile(mode="w")
-        TSHARK_CACHE[msg.NAME] = p, t
+        TSHARK_CACHE[msg.name] = p, t
     t.write(msg.l3)
     t.flush()
 
@@ -182,7 +182,7 @@ def main(args):
                 func = decode_l3_short
             else:
                 continue
-            xdr_nb = sum([len(x) for x in quenue])
+            msg_nb = sum([len(x) for x in quenue])
 
             for xdr in XDRs:
                 with concurrent.futures.ProcessPoolExecutor(
@@ -192,9 +192,11 @@ def main(args):
                         xdr.messages, executor.map(func, xdr.messages)
                     ):
                         if meta is not None:
-                            xdr.add_meta(f"{msg.NAME}: {meta}")
-                        print(f"l3 decoding. {len(xdr.messages)} {xdr_nb} left")
-                        xdr_nb -= 1
+                            xdr.add_meta(f"{msg.name}: {meta}")
+                msg_nb -= len(xdr.messages)
+                print(
+                    f"l3. {len(xdr.messages)} msgs in xdr. {msg_nb} msgs in curr file left"
+                )
     if parsed.correlate:
         for idx, xdr in enumerate(XDRs):
             if (parsed.tmsi and parsed.tmsi == xdr.tmsi) or (not parsed.tmsi):

@@ -227,7 +227,7 @@ class XDR:
 
     def add_meta(self, metas: str):
         if metas not in self.metas:
-            self.metas.append(metas)
+            self.metas.append(metas + "\n")
 
     def __str__(self):
         result = self.__repr__()
@@ -242,7 +242,7 @@ class XDR:
         result = f"{ts_begin} -- {ts_end}({len(self.messages)}): {self.tmsi}\t\t"
         for key in self.key_fields.keys():
             result += f"{key}:{getattr(self,key,None)}\t"
-        return result
+        return result + "\n"
 
 
 class XDR3G(XDR):
@@ -298,9 +298,12 @@ class XDR4G(XDR):
 
         if item.enbid is not None and self.enbid is not None:
             key_match &= self.enbid == item.enbid
-            if len(self.messages) == 1 and (self.messages[0].name == self.x2_hnd_req):
+            if (
+                len(self.messages) == 1 and (self.messages[0].name == self.x2_hnd_req)
+            ) or (item.name == self.x2_hnd_req):
                 pass
-            key_match &= self.trsr == item.trsr
+            else:
+                key_match &= self.trsr == item.trsr
         elif item.crnti is not None and self.crnti is not None:
             key_match &= self.crnti == item.crnti
         else:
