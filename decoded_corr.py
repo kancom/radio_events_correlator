@@ -7,8 +7,9 @@ import pathlib
 import pipes
 import sys
 import tempfile
+from collections import defaultdict
 from datetime import datetime
-# from multiprocessing import Manager
+from operator import attrgetter
 from typing import List
 
 from correlator.classes import XDR, XDR3G, XDR4G, Message, Message3G, Message4G
@@ -117,6 +118,7 @@ def parse_argsuments(args):
     parser.add_argument("--correlate", dest="correlate", action="store_true")
     parser.add_argument("--l3", dest="l3", action="store_true")
     parser.add_argument("--fulldecode", dest="fulldecode", action="store_true")
+    parser.add_argument("--stat", dest="stat", action="store_true")
     parser.add_argument(
         "-g", dest="tech", action="store", choices=("3G", "4G"), default="4G"
     )
@@ -211,6 +213,13 @@ def main(args):
                 print(msg)
             else:
                 print(msg.BODY)
+    if parsed.stat:
+        stats = defaultdict(int)
+        for xdr in XDRs:
+            ln = len(xdr.messages)
+            stats[ln] += 1
+        for ln in sorted(stats, key=stats.get, reverse=True):
+            print(f"msgs: {ln}\tnumber: {stats[ln]}")
     print("Nb of messages: ", sum([len(x) for x in quenue]))
 
 
