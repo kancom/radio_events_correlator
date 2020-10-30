@@ -36,6 +36,16 @@ def test_msg_matches():
     assert not msg2.matches(gci=1, trsr=27918, enbid=273678, ueid=None)
 
 
+def test_xdr_descr():
+    msg = Message4G()
+    msg.from_text(msg_4g_from_text[1].split("\n"))
+    xdr = XDR4G(msg)
+    msg_proper = Message4G()
+    msg_proper.from_text(msg_4g_from_text[2].split("\n"))
+    xdr.add_msg(msg_proper)
+    assert len(xdr.get_msg_descr()) == 2
+
+
 def test_xdr_4G_correlation():
     msg = Message4G()
     msg.from_text(msg_4g_from_text[1].split("\n"))

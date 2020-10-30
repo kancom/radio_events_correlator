@@ -1,4 +1,6 @@
+import csv
 import itertools
+import pathlib
 import re
 import sys
 from datetime import datetime
@@ -27,6 +29,9 @@ class Message:
         for k in self.key_fields.keys():
             setattr(self, k, None)
         self.key_field = list(self.key_fields.keys())[0]
+
+    # def __hash__(self):
+    #     return self.body.__hash__()
 
     def __eq__(self, other):
         return self.body[50:] == other.body[50:]
@@ -184,7 +189,7 @@ class XDR:
 
     def add_msg(self, msg: Message, meta=None):
         if msg in self.messages:
-            print("same message")
+            # print("same message", file=sys.stderr)
             return
         for field, attr in self.key_fields.items():
             s_v = getattr(self, field, None)
@@ -243,6 +248,17 @@ class XDR:
         for key in self.key_fields.keys():
             result += f"{key}:{getattr(self,key,None)}\t"
         return result + "\n"
+
+    def get_msg_descr(self):
+        return set(
+            sorted(
+                [
+                    msg.name
+                    for msg in self.messages
+                    if not msg.name.startswith("INTERNAL")
+                ]
+            )
+        )
 
 
 class XDR3G(XDR):
@@ -309,3 +325,40 @@ class XDR4G(XDR):
         else:
             key_match = False
         return key_match
+
+
+class XDR_scenario:
+    persistent_name = "scenarios"
+    key_nb = "number"
+    key_msgs = "msgs"
+    delim = ";"
+
+    def __init__(self, file_name=None):
+        self._xdr_scenarios = []
+        self._file_name = file_name if file_name else self.persistent_name
+
+    def load_persistent(self):
+        path = pathlib.Path(self._file_name)
+        if not path.exists():
+            return
+        with open(path, "r") as file_hnd:
+            dict_reader = csv.DictReader(file_hnd)
+            for line in dict_reader:
+                self._xdr_scenarios.append(set(line[self.key_msgs].split(self.delim)))
+
+    def save_persistent(self):
+        with open(self._file_name, "w") as file_hnd:
+            dict_writer = csv.DictWriter(
+                file_hnd, fieldnames=[self.key_nb, self.key_msgs]
+            )
+            dict_writer.writeheader()
+            for nb, scenario in enumerate(self._xdr_scenarios):
+                dict_writer.writerow(
+                    {self.key_nb: nb, self.key_msgs: self.delim.join(scenario)}
+                )
+
+    def scenario_nb(self, scenario: str) -> int:
+        if scenario not in self._xdr_scenarios:
+            self._xdr_scenarios.append(scenario)
+        result = self._xdr_scenarios.index(scenario)
+        return result
